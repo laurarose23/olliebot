@@ -1,0 +1,121 @@
+import {
+  Client,
+  GatewayIntentBits,
+  Events,
+  type Message,
+} from "discord.js";
+import { logger } from "./lib/logger";
+
+const SILLY_THINGS = [
+  "*zooms around the living room for no reason at all* 🏃",
+  "found a sock. this is my sock now. don't ask questions.",
+  "there is DEFINITELY something outside. i don't know what it is but it needs to be barked at immediately.",
+  "someone rang the doorbell on TV and now i have lost my mind completely",
+  "i have been staring at this spot on the wall for 20 minutes. the spot knows what it did.",
+  "refused to walk on the weird part of the sidewalk. you know the one.",
+  "someone said 'walk' in a completely unrelated sentence and i am now ready. leash. NOW.",
+  "rolled in something outside. i smell incredible. everyone else is wrong.",
+  "the mailman came. i have never been more furious in my entire life.",
+  "sat on the remote and changed the channel and then looked very pleased with myself",
+  "found a chip under the couch from 2 weeks ago. ate it. no notes.",
+  "licked the air for a moment and then just walked away",
+  "heard someone open the fridge from the other side of the house. appeared instantly.",
+  "tried to fit my whole body under the coffee table. most of me made it.",
+  "had a dream. was very upset about it.",
+  "barked at my own reflection and then got embarrassed",
+  "saw a plastic bag. absolutely unacceptable. barked until it stopped existing.",
+  "brought you a shoe as a gift. it's not even your shoe. you're welcome.",
+  "sneezed so hard i scared myself",
+  "spun in a circle seven times before lying down. the eighth spin was unnecessary.",
+  "ate my food in 4 seconds, then looked at you like you were hiding more food",
+  "sat on your laptop to tell you it's time to pay attention to me",
+  "heard the word 'bath' from three rooms away. am now hiding.",
+  "stole a piece of toast and looked you dead in the eyes while eating it",
+  "the vacuum is on. I REPEAT, THE VACUUM IS ON. THIS IS NOT A DRILL.",
+];
+
+const GREETINGS = [
+  "HELLO HELLO HELLO *vibrates*",
+  "YOU'RE HERE. I CANNOT BELIEVE YOU'RE HERE. I MISSED YOU SO MUCH (it's been 4 minutes)",
+  "oh hi oh hi oh hi oh hi",
+  "*aggressively wags*",
+  "YOU!! I CHOOSE YOU!!",
+];
+
+function randomFrom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+export function startBot(): void {
+  const token = process.env["DISCORD_BOT_TOKEN"];
+  if (!token) {
+    logger.warn("DISCORD_BOT_TOKEN not set — skipping bot startup");
+    return;
+  }
+
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.DirectMessages,
+    ],
+  });
+
+  client.once(Events.ClientReady, (c) => {
+    logger.info({ tag: c.user.tag }, "Dog bot is online and ready to be silly");
+    c.user.setActivity("with a sock 🧦");
+  });
+
+  client.on(Events.MessageCreate, async (message: Message) => {
+    if (message.author.bot) return;
+
+    const content = message.content.toLowerCase().trim();
+
+    if (
+      content === "!dog" ||
+      content === "!bark" ||
+      content === "!silly" ||
+      content === "!woof"
+    ) {
+      await message.reply(randomFrom(SILLY_THINGS));
+      return;
+    }
+
+    if (content === "!hello" || content === "!hi" || content === "!hey") {
+      await message.reply(randomFrom(GREETINGS));
+      return;
+    }
+
+    if (content === "!help" || content === "!commands") {
+      await message.reply(
+        "**Dog commands 🐾**\n" +
+          "`!dog` / `!bark` / `!silly` / `!woof` — get a random silly dog update\n" +
+          "`!hello` / `!hi` — say hi and get a very enthusiastic greeting\n" +
+          "`!help` — show this message"
+      );
+      return;
+    }
+
+    const mentionedBot =
+      message.mentions.has(client.user!) ||
+      content.includes("good boy") ||
+      content.includes("good girl") ||
+      content.includes("who's a good");
+
+    if (mentionedBot) {
+      const responses = [
+        "*tail wagging intensifies*",
+        "ME. I AM. I AM THE GOOD ONE. THANK YOU.",
+        "*does a little spin*",
+        "i know 🐾",
+        "*brings you a shoe as a thank you*",
+      ];
+      await message.reply(randomFrom(responses));
+    }
+  });
+
+  client.login(token).catch((err) => {
+    logger.error({ err }, "Failed to log in to Discord");
+  });
+}
