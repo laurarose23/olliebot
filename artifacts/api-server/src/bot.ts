@@ -2,9 +2,32 @@ import {
   Client,
   GatewayIntentBits,
   Events,
+  AttachmentBuilder,
   type Message,
 } from "discord.js";
 import { logger } from "./lib/logger";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PHOTOS_DIR = path.resolve(__dirname, "../dog-photos");
+
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
+
+async function getRandomPhoto(): Promise<string | null> {
+  try {
+    const files = await readdir(PHOTOS_DIR);
+    const images = files.filter((f) =>
+      IMAGE_EXTENSIONS.has(path.extname(f).toLowerCase())
+    );
+    if (images.length === 0) return null;
+    const pick = images[Math.floor(Math.random() * images.length)];
+    return path.join(PHOTOS_DIR, pick);
+  } catch {
+    return null;
+  }
+}
 
 const SILLY_THINGS = [
   "*zooms around the living room for no reason at all* 🏃",
@@ -40,6 +63,17 @@ const GREETINGS = [
   "oh hi oh hi oh hi oh hi",
   "*aggressively wags*",
   "YOU!! I CHOOSE YOU!!",
+];
+
+const PHOTO_CAPTIONS = [
+  "look at this angel 😇",
+  "just a regular supermodel, no big deal 🐾",
+  "caught being perfect (as usual)",
+  "this is my good side. they're all my good side.",
+  "available for head scratches and treats 🦴",
+  "professional couch occupier 🛋️",
+  "living my best life rn",
+  "a whole entire good boy/girl in one photo",
 ];
 
 function randomFrom(arr: string[]): string {
@@ -87,10 +121,27 @@ export function startBot(): void {
       return;
     }
 
+    if (content === "!photo" || content === "!pic" || content === "!cute") {
+      const photoPath = await getRandomPhoto();
+      if (!photoPath) {
+        await message.reply(
+          "no photos yet 🥺 add some to the `dog-photos/` folder in the project!"
+        );
+        return;
+      }
+      const attachment = new AttachmentBuilder(photoPath);
+      await message.reply({
+        content: randomFrom(PHOTO_CAPTIONS),
+        files: [attachment],
+      });
+      return;
+    }
+
     if (content === "!help" || content === "!commands") {
       await message.reply(
         "**Dog commands 🐾**\n" +
           "`!dog` / `!bark` / `!silly` / `!woof` — get a random silly dog update\n" +
+          "`!photo` / `!pic` / `!cute` — post a random photo of the good boy/girl\n" +
           "`!hello` / `!hi` — say hi and get a very enthusiastic greeting\n" +
           "`!help` — show this message"
       );
