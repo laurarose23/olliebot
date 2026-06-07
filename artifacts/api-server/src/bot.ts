@@ -4,11 +4,13 @@ import {
   Events,
   AttachmentBuilder,
   type Message,
+  type TextChannel,
 } from "discord.js";
 import { logger } from "./lib/logger";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import cron from "node-cron";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PHOTOS_DIR = path.resolve(__dirname, "../dog-photos");
@@ -76,8 +78,51 @@ const PHOTO_CAPTIONS = [
   "a whole entire good boy/girl in one photo",
 ];
 
+const DAILY_OPENERS = [
+  "🐾 **daily dog update:**",
+  "📰 **breaking news from the dog:**",
+  "🌅 **good morning. here is your dog report:**",
+  "📋 **today's dog activities:**",
+  "🐕 **hi it's me, your dog. here's what's happening:**",
+];
+
 function randomFrom(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+async function postDailyUpdate(client: Client): Promise<void> {
+  const channelId = process.env["DOG_CHANNEL_ID"];
+  if (!channelId) {
+    logger.warn("DOG_CHANNEL_ID not set — skipping daily update");
+    return;
+  }
+
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || !channel.isTextBased()) {
+      logger.warn({ channelId }, "Channel not found or not a text channel");
+      return;
+    }
+    const textChannel = channel as TextChannel;
+
+    const photoPath = await getRandomPhoto();
+    const opener = randomFrom(DAILY_OPENERS);
+    const update = randomFrom(SILLY_THINGS);
+
+    if (photoPath) {
+      const attachment = new AttachmentBuilder(photoPath);
+      await textChannel.send({
+        content: `${opener}\n${update}\n\n${randomFrom(PHOTO_CAPTIONS)}`,
+        files: [attachment],
+      });
+    } else {
+      await textChannel.send(`${opener}\n${update}`);
+    }
+
+    logger.info({ channelId }, "Daily dog update posted");
+  } catch (err) {
+    logger.error({ err }, "Failed to post daily dog update");
+  }
 }
 
 export function startBot(): void {
@@ -99,6 +144,15 @@ export function startBot(): void {
   client.once(Events.ClientReady, (c) => {
     logger.info({ tag: c.user.tag }, "Dog bot is online and ready to be silly");
     c.user.setActivity("with a sock 🧦");
+
+    // Daily update — default 9am, override with DOG_POST_TIME (cron format)
+    const cronTime = process.env["DOG_POST_TIME"] ?? "0 9 * * *";
+    cron.schedule(cronTime, () => {
+      postDailyUpdate(client).catch((err) =>
+        logger.error({ err }, "Unhandled error in daily post")
+      );
+    });
+    logger.info({ cronTime }, "Daily dog update scheduled");
   });
 
   client.on(Events.MessageCreate, async (message: Message) => {
@@ -137,13 +191,23 @@ export function startBot(): void {
       return;
     }
 
+    if (content === "!dailypost" || content === "!update") {
+      await message.reply("posting now! 🐾");
+      await postDailyUpdate(client);
+      return;
+    }
+
     if (content === "!help" || content === "!commands") {
+      const cronTime = process.env["DOG_POST_TIME"] ?? "0 9 * * *";
       await message.reply(
         "**Dog commands 🐾**\n" +
           "`!dog` / `!bark` / `!silly` / `!woof` — get a random silly dog update\n" +
           "`!photo` / `!pic` / `!cute` — post a random photo of the good boy/girl\n" +
+          "`!dailypost` / `!update` — trigger today's update right now\n" +
           "`!hello` / `!hi` — say hi and get a very enthusiastic greeting\n" +
-          "`!help` — show this message"
+          "`!help` — show this message\n\n" +
+          `📅 Daily updates scheduled at: \`${cronTime}\` (UTC)\n` +
+          "_(set \`DOG_POST_TIME\` env var to change, e.g. \`0 12 * * *\` for noon)_"
       );
       return;
     }

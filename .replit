@@ -26,3 +26,8 @@ externalPort = 80
 [[ports]]
 localPort = 8081
 externalPort = 8081
+
+[userenv]
+
+[userenv.shared]
+DOG_CHANNEL_ID = "1512080744338690228"
